@@ -1,0 +1,147 @@
+import org.openkinect.freenect.*;
+import org.openkinect.processing.*;
+import com.pi4j.io.gpio.GpioController;
+import com.pi4j.io.gpio.GpioFactory;
+import com.pi4j.io.gpio.GpioPinDigitalInput;
+import com.pi4j.io.gpio.PinPullResistance;
+import com.pi4j.io.gpio.RaspiPin;
+import processing.io.*;
+
+GpioController gpio;
+GpioPinDigitalInput button;
+
+KinectTracker tracker;
+Kinect kinect;
+
+void setup(){
+  GPIO.pinMode(26, GPIO.OUTPUT);
+  GPIO.pinMode(19, GPIO.OUTPUT);
+  GPIO.pinMode(13, GPIO.OUTPUT);
+  GPIO.pinMode(6, GPIO.OUTPUT);
+  GPIO.pinMode(5, GPIO.OUTPUT);
+  GPIO.pinMode(11, GPIO.OUTPUT);
+  GPIO.pinMode(22, GPIO.OUTPUT);
+  GPIO.pinMode(27, GPIO.OUTPUT);
+  GPIO.pinMode(17, GPIO.OUTPUT);
+  GPIO.pinMode(4, GPIO.OUTPUT);
+  GPIO.pinMode(3, GPIO.OUTPUT);
+  GPIO.pinMode(2, GPIO.OUTPUT);
+  size(640, 520);
+  kinect = new Kinect(this);
+  tracker = new KinectTracker();
+}
+
+void draw() {
+  background(255);
+
+  tracker.track();
+  tracker.display();
+
+  PVector v1 = tracker.getPos();
+  fill(50, 100, 250, 200);
+  noStroke();
+  ellipse(v1.x, v1.y, 20, 20);
+
+  PVector v2 = tracker.getLerpedPos();
+  fill(100, 250, 50, 200);
+  noStroke();
+  ellipse(v2.x, v2.y, 20, 20);
+
+  int t = tracker.getThreshold();
+  fill(0);
+}
+
+
+class KinectTracker {
+
+  int threshold = 745;
+
+  PVector loc;
+
+  PVector lerpedLoc;
+
+  int[] depth;
+
+  PImage display;
+   
+  KinectTracker() {
+    kinect.initDepth();
+    kinect.enableMirror(true);
+    display = createImage(640, 480, RGB);
+    loc = new PVector(0, 0);
+    lerpedLoc = new PVector(0, 0);
+  }
+
+  void track() {
+    depth = kinect.getRawDepth();
+
+    if (depth == null) return;
+
+    float sumX = 0;
+    float sumY = 0;
+    float count = 0;
+
+    for (int x = 0; x < kinect.width; x++) {
+      for (int y = 0; y < kinect.height; y++) {
+        
+        int offset =  x + y*kinect.width;
+        int rawDepth = depth[offset];
+
+        if (rawDepth < threshold) {
+          sumX += x;
+          sumY += y;
+          count++;
+        }
+      }
+    }
+    if (count != 0) {
+      loc = new PVector(sumX/count, sumY/count);
+    }
+
+    lerpedLoc.x = PApplet.lerp(lerpedLoc.x, loc.x, 0.3f);
+    lerpedLoc.y = PApplet.lerp(lerpedLoc.y, loc.y, 0.3f);
+  }
+
+  PVector getLerpedPos() {
+    return lerpedLoc;
+  }
+
+  PVector getPos() {
+    return loc;
+  }
+
+  void display() {
+    PImage img = kinect.getDepthImage();
+
+    if (depth == null || img == null) return;
+
+    display.loadPixels();
+    for (int x = 0; x < kinect.width; x++) {
+      for (int y = 0; y < kinect.height; y++) {
+
+        int offset = x + y * kinect.width;
+        // Raw depth
+        int rawDepth = depth[offset];
+        int pix = x + y * display.width;
+        if (rawDepth < threshold) {
+          // A red color instead
+          display.pixels[pix] = color(150, 50, 50);
+        } else {
+          display.pixels[pix] = img.pixels[offset];
+        }
+      }
+    }
+    display.updatePixels();
+
+    // Draw the image
+    image(display, 0, 0);
+  }
+
+  int getThreshold() {
+    return threshold;
+  }
+
+  void setThreshold(int t) {
+    threshold =  t;
+  }
+}
